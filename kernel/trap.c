@@ -66,20 +66,6 @@ usertrap(void)
     intr_on();
 
     syscall();
-  
-  }
-  else if(r_scause() == 15 || r_scause() == 13)
-  {
-    uint64 faulting_va = PGROUNDDOWN(r_stval());
-    pte_t *pte;
-    pte = walk(p->pagetable,faulting_va,0);
-    uint flags = PTE_FLAGS(*pte);
-    flags |= PTE_W;
-    char* new_pa = kalloc();
-    char* pa = (char*)PTE2PA(*pte);
-    memmove(new_pa,pa,PGSIZE);
-    uvmunmap(p->pagetable,faulting_va,1,1);
-    mappages(p->pagetable,faulting_va,PGSIZE,(uint64)new_pa,flags);
   }
   else if((which_dev = devintr()) != 0){
     // ok
@@ -236,7 +222,7 @@ kerneltrap()
 
   if((which_dev = devintr()) == 0){
     printf("scause %p\n", scause);
-    printf("sepc=%p stval=%p\n name=%s", r_sepc(), r_stval());
+    printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
     panic("kerneltrap");
   }
 

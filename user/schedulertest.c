@@ -16,6 +16,9 @@ int main() {
       if (pid < 0)
           break;
       if (pid == 0) {
+#ifdef LBS
+        settickets(70*n);
+#endif
 #ifndef FCFS
           if (n < IO) {
             sleep(200); // IO bound processes
@@ -31,9 +34,7 @@ int main() {
 #ifdef PBS
         set_priority(80, pid); // Will only matter for PBS, set lower priority for IO bound processes 
 #endif
-// #ifdef LBS
-//         settickets(70*n);
-// #endif
+
       }
   }
   for(;n > 0; n--) {

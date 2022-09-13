@@ -141,7 +141,6 @@ UPROGS=\
 	$U/_strace\
 	$U/_zombie\
 	$U/_alarmtest\
-	$U/_LBStest\
 	$U/_schedulertest\
 
 fs.img: mkfs/mkfs README $(UPROGS)

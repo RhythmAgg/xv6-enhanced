@@ -90,7 +90,7 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
-  initlock(&lock_proc_table,"proc_table");
+  // initlock(&lock_proc_table,"proc_table");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
@@ -471,6 +471,7 @@ exit(int status)
 
   p->xstate = status;
   p->state = ZOMBIE;
+  p->endtime = ticks;
 
   release(&wait_lock);
 
@@ -586,7 +587,6 @@ void update_time(void)
   struct proc *p;
   for (p = proc; p < &proc[NPROC]; p++)
   {
-    acquire(&p->lock);
     if (p->state == RUNNING)
     {
       p->trtime++;
@@ -594,17 +594,23 @@ void update_time(void)
     }
     else if(p->state == RUNNABLE)
     {
-      if(p != myproc()) p->wait_time++;
+      if(p != myproc()){
+        p->wait_time++;
+        if(p->qprio != 0 && p->wait_time > 20)
+        {
+          q_count[p->qprio]--;
+          p->qprio--;
+          q_count[p->qprio]++;
+          p->intime = ticks;
+          p->wait_time = 0;
+        }
+      }
     }
     else if (p->state == SLEEPING)
     {
       p->t_sleep++;
       p->current_tsun++;
     }
-#ifdef MLFQ
-
-#endif
-    release(&p->lock);
   }
 }
 
@@ -649,9 +655,9 @@ scheduler(void)
 #elif defined(FCFS)
 
 c->proc = 0;
-struct proc* temp = proc;
 for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
+    struct proc* temp = 0;
     intr_on();
     uint64 max = 100000000000;
 
@@ -675,8 +681,8 @@ for(;;){
       }
       release(&p->lock);
     }
-    acquire(&temp->lock);
-    if(temp->state == RUNNABLE) {
+    if(temp !=0 && temp->state == RUNNABLE) {
+      acquire(&temp->lock);
       // Switch to chosen process.  It is the process's job
       // to release its lock and then reacquire it
       // before jumping back to us.
@@ -688,15 +694,14 @@ for(;;){
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
+      release(&temp->lock);
     }
-    release(&temp->lock);
   }
   #elif defined(LBS)
-
-  struct proc* temp = proc;
   
   c->proc = 0;
   for(;;){
+    struct proc* temp = 0;
     int count_runnable=0;
     acquire(&lock_proc_table);
     for(p = proc; p < &proc[NPROC]; p++) {
@@ -729,8 +734,8 @@ for(;;){
         continue;
       }
       // p = temp;
-      acquire(&temp->lock);
-      if(temp->state == RUNNABLE) {
+      if(temp != 0 && temp->state == RUNNABLE) {
+        acquire(&temp->lock);
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
@@ -742,16 +747,15 @@ for(;;){
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
-        
+        release(&temp->lock);      
       }
-      release(&temp->lock);
     }
   }
   #elif defined(PBS)
 
   c->proc = 0;
-  struct proc* temp = proc;
   for(;;){
+    struct proc* temp = 0;
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
     int minDP = 1000;
@@ -776,8 +780,9 @@ for(;;){
       }
       release(&p->lock);
     }
-    acquire(&temp->lock);
-    if(temp->state == RUNNABLE) {
+    if(temp != 0 && temp->state == RUNNABLE) {
+      acquire(&temp->lock);
+
       // Switch to chosen process.  It is the process's job
       // to release its lock and then reacquire it
       // before jumping back to us.
@@ -793,97 +798,54 @@ for(;;){
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
+      release(&temp->lock);
     }
-    release(&temp->lock);
   }
   #elif defined(MLFQ)
-
   c->proc = 0;
-  struct proc* temp = proc;
   for(;;){
-    uint64 min_intime = 100000000000;
+    struct proc* temp = 0;
+    uint64 min_intime = 1000000000;
     int found = 0;
-    // printf("%d\n",q_count[0]);
-    if(q_count[0] > 0){
-      for(p = proc; p<&proc[NPROC]; p++){
-        if(p->qprio != 0) continue;
-        if(p->state != RUNNABLE) continue;
-        if(p->intime < min_intime){
-          printf("hello-1\n");
-          temp = p;
-          min_intime = p->intime;
-          found = 1;
+    intr_on();
+    for(int i=0;i<4;i++)
+    {
+      if(q_count[i]>0)
+      {
+        for(p = proc; p<&proc[NPROC]; p++){
+          if(p->qprio != i) continue;
+          if(p->state != RUNNABLE) continue;
+          if(p->intime < min_intime){
+            temp = p;
+            min_intime = p->intime;
+            found = 1;
+          }
         }
+        if(found==1) break;
       }
     }
-    if(found == 0 && q_count[1] > 0){
-      for(p = proc; p<&proc[NPROC]; p++){
-        if(p->qprio != 1) continue;
-        if(p->state != RUNNABLE) continue;
-        if(p->intime < min_intime){
-          printf("hello-2\n");
-          temp = p;
-          min_intime = p->intime;
-          found = 1;
-        }
-      }
-    }
-    if(found == 0 && q_count[2] > 0){
-      for(p = proc; p<&proc[NPROC]; p++){
-        if(p->qprio != 2) continue;
-        if(p->state != RUNNABLE) continue;
-        if(p->intime < min_intime){
-          printf("hello-3\n");
-          temp = p;
-          min_intime = p->intime;
-          found = 1;
-        }
-      }
-    }
-    if(found == 0 && q_count[3] > 0){
-      for(p = proc; p<&proc[NPROC]; p++){
-        if(p->qprio != 3) continue;
-        if(p->state != RUNNABLE) continue;
-        if(p->intime < min_intime){
-          printf("hello-4\n");
-          temp = p;
-          min_intime = p->intime;
-          found = 1;
-        }
-      }
-    }
-    else{
-      for(p = proc; p<&proc[NPROC]; p++){
-        if(p->qprio != 4) continue;
+    if(found == 0)
+    {
+      for(p = proc; p < &proc[NPROC]; p++)
+      {
         if(p->state != RUNNABLE) continue;
         else{
-          printf("hello-5\n");
           temp = p;
+          found = 1;
           break;
         }
       }
     }
-    acquire(&temp->lock);
-    if(temp->state == RUNNABLE) {
-      // Switch to chosen process.  It is the process's job
-      // to release its lock and then reacquire it
-      // before jumping back to us.
+    if(temp!=0 && temp->state == RUNNABLE) {
+      acquire(&temp->lock);
       temp->state = RUNNING;
-      temp->wait_time = 0;
       c->proc = temp;
-      printf("%s\n",temp->name);
+      temp->wait_time = 0;
       swtch(&c->context, &temp->context);
-      // for(struct proc* pp = proc; pp < &proc[NPROC]; pp++){
-      //   if(pp->state != UNUSED){
-      //     printf("%d %d %s %s\n",pp->pid,pp->qprio,pp->name,pp->state);
-      //   }
-      // }
-
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
+      temp->wait_time = 0;
       c->proc = 0;
+      release(&temp->lock);
     }
-    release(&temp->lock);
   }
   #else
   printf("errro:\n");
