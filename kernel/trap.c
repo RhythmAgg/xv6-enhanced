@@ -9,6 +9,7 @@
 struct spinlock tickslock;
 uint ticks;
 int lbs_last_ticket = 0;
+extern struct proc proc[NPROC];
 
 extern char trampoline[], uservec[], userret[];
 
@@ -100,10 +101,15 @@ usertrap(void)
     int prio = p->qprio;
     for(int i=prio - 1;i>=0;i--){
       if(q_count[i] > 0){
-        yield();
-        x=1;
-        break;
+          for(struct proc *p = proc; p < &proc[NPROC]; p++){
+          if(p->qprio == i && p->state == RUNNABLE){
+            yield();
+            x=1;
+            break;
+          }
+        }
       }
+      if(x == 1) break;
     }
     if(x == 0){
     if(prio == 0){
@@ -240,10 +246,15 @@ kerneltrap()
     int prio = p->qprio;
     for(int i=prio - 1;i>=0;i--){
       if(q_count[i] > 0){
-        yield();
-        x = 1;
-        break;
+          for(struct proc *p = proc; p < &proc[NPROC]; p++){
+          if(p->qprio == i && p->state == RUNNABLE){
+            yield();
+            x=1;
+            break;
+          }
+        }
       }
+      if(x == 1) break;
     }
     if(x == 0){
     if(prio == 0){

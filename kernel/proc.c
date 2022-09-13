@@ -596,7 +596,7 @@ void update_time(void)
     {
       if(p != myproc()){
         p->wait_time++;
-        if(p->qprio != 0 && p->wait_time > 20)
+        if(p->qprio != 0 && p->wait_time > 40)
         {
           q_count[p->qprio]--;
           p->qprio--;
@@ -803,11 +803,24 @@ for(;;){
   }
   #elif defined(MLFQ)
   c->proc = 0;
+  // int x = 0;
   for(;;){
     struct proc* temp = 0;
     uint64 min_intime = 1000000000;
     int found = 0;
     intr_on();
+    // for(int i=0;i<5;i++) printf("%d ",q_count[i]);
+    // for(p = proc; p<&proc[NPROC]; p++)
+    // {
+    //   // printf("hello");
+    //   if(p->state != UNUSED){
+    //     if(p->pid == 9 || p->pid == 5 || p->pid == 6 || p->pid == 7 || p->pid == 8){
+    //       printf("%d: %d %d-------->%d\n",p->pid,p->qprio,p->state,ticks);
+    //     }
+    //   }
+    // }
+    // printf("\n");
+    // x = 1;
     for(int i=0;i<4;i++)
     {
       if(q_count[i]>0)
@@ -842,6 +855,8 @@ for(;;){
       c->proc = temp;
       temp->wait_time = 0;
       swtch(&c->context, &temp->context);
+      temp->current_tsun = 0;
+      temp->current_trun = 0;
       temp->wait_time = 0;
       c->proc = 0;
       release(&temp->lock);
